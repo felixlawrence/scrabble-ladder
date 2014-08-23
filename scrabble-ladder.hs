@@ -1,4 +1,7 @@
 import Data.List
+import Data.Tree
+import Data.Functor
+import Control.Monad
 
 data Word = Word
   { l1 :: Char
@@ -6,38 +9,35 @@ data Word = Word
   , l3 :: Char
   , l4 :: Char
   } deriving (Eq, Show, Ord)
--- FIXME: get Ord working properly
 
-type Dictionary = [String]
-dictionary :: Dictionary
-dictionary = [[]]
+type ForestDictionary = Forest Char
+revDict = [Node 'a' []] :: ForestDictionary
 
-type Dictionary' = [Word]
-dictionary' :: Dictionary'
-dictionary' = []
-
-reverseDictionary :: Dictionary
-reverseDictionary = [[]]
+word4list :: [Word]
+word4list = []
 
 type Ladder = [Word]
 
 findLadder :: Int -> Either Ladder Ladder
+-- Calculate a ladder of height 'rung'
 findLadder 0 = Right []
 findLadder rung =
   case findLadder (rung - 1) of
     Left doneLadder   -> Left doneLadder -- admit defeat
     Right subLadder   -> addRung Nothing subLadder
--- Calculate a ladder of height 'rung', the bottom word should be > lastWord if specified
 
 addRung :: Maybe Word -> Ladder -> Either Ladder Ladder
-addRung lastWord ladder =
-  if length ladder < 3 then
-    addEarlyRung lastWord ladder
-  else
-    addMidRung lastWord ladder
+addRung lastWord ladder
+  -- For now, don't do anything clever with rows 2 and 3
+  | length ladder < 3 = addFirstRung lastWord ladder
+  | otherwise = addMidRung lastWord ladder
 
-addEarlyRung :: Maybe Word -> Ladder -> Either Ladder Ladder
-addEarlyRung lastWord ladder = Left [] -- TODO: stub
+addFirstRung :: Maybe Word -> Ladder -> Either Ladder Ladder
+addFirstRung Nothing ladder = Right ((head word4list):ladder)
+addFirstRung (Just lastWord) ladder =
+  case find (lastWord <) word4list of
+    Nothing   -> Left []
+    Just word -> Right (word:ladder)
 
 addMidRung :: Maybe Word -> Ladder -> Either Ladder Ladder
 addMidRung lastWord lad =
@@ -45,10 +45,10 @@ addMidRung lastWord lad =
   case findWord (take 3 lad) lastWord of
     Just word -> Right (word:lad) -- Yes we can!
     Nothing -> -- Nope. revise the ladder we've been given.
-      case addRung (Just (head lad)) (tail lad) of
-        Left lad'   -> Left lad' -- Admit defeat
-        Right lad'  -> addRung Nothing lad'
-
+      (addRung Nothing) =<< addRung (Just (head lad)) (tail lad)
+      --case addRung (Just (head lad)) (tail lad) of
+      --  Left lad'   -> Left lad' -- Admit defeat
+      --  Right lad'  -> addRung Nothing lad'
 
 findWord :: Ladder -> Maybe Word -> Maybe Word
 findWord (a:b:c:[]) lastWord =
@@ -58,20 +58,29 @@ findWord (a:b:c:[]) lastWord =
       } in
     actuallyFindWord l1s l2s l3s lastWord
 
-
-getLettersRev :: [Char] -> [Char]
+getLettersRev :: [Char] -> [Char] -- TODO: Go to Maybe [Char]?
 getLettersRev letters =
-  map head $ foldr lookupSuffixes reverseDictionary letters
+  map rootLabel $ foldl lookupSuffixes revDict letters
 
-lookupSuffixes :: Char -> Dictionary -> Dictionary
-lookupSuffixes letter revDict =
-  map tail $ filter (\rw -> head rw == letter) revDict
-  -- TODO: stripPrefix will do this?
+lookupSuffixes :: ForestDictionary -> Char -> ForestDictionary
+lookupSuffixes dict letter =
+  -- Search the forest for letter and return the relevant subforest
+  --subForest <$> find ((letter ==) . rootLabel) dict
+  case find ((letter ==) . rootLabel) dict of
+    Just subDict  -> subForest subDict
+    Nothing       -> []
 
 actuallyFindWord :: [Char] -> [Char] -> [Char] -> Maybe Word -> Maybe Word
-actuallyFindWord l1s l2s l3s Nothing =
-  find (\x -> (elem (l1 x) l1s) && (elem (l2 x) l2s) && (elem (l3 x) l3s)) dictionary'
-actuallyFindWord l1s l2s l3s (Just lastWord) =
-  find (\x -> (x > lastWord) && (elem (l1 x) l1s) 
-    && (elem (l2 x) l2s) && (elem (l3 x) l3s)) dictionary'
-
+-- TODO: speed this up by indexing or other?
+-- TODO: check if (e.g.) l3s==[] then does it bother checking everything?
+actuallyFindWord l1s l2s l3s lastWordM =
+  if l1s == [] || l2s == [] || l3s == [] -- Is haskell smart enough to take the shortcut?
+  then Nothing
+  else
+    let searchLetCrit = (\x -> elem (l1 x) l1s && elem (l2 x) l2s && elem (l3 x) l3s)
+        searchCrit =
+          case lastWordM of 
+            Nothing       -> searchLetCrit
+            Just lastWord -> liftM2 (&&) searchLetCrit (lastWord <)
+    in
+      find searchCrit word4list
