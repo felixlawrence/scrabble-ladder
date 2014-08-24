@@ -44,10 +44,9 @@ addMidRung lastWord lad =
   case findWord word4list (take 3 lad) lastWord of
     Just word -> Right (word:lad) -- Yes we can!
     Nothing -> -- Nope. revise the ladder we've been given.
-      (addRung Nothing) =<< addRung (Just (head lad)) (tail lad)
-      --case addRung (Just (head lad)) (tail lad) of
-      --  Left lad'   -> Left lad' -- Admit defeat
-      --  Right lad'  -> addRung Nothing lad'
+      case addRung (Just (head lad)) (tail lad) of
+        Left lad'   -> Left lad -- Admit defeat
+        Right lad'  -> addRung Nothing lad'
 
 findWord :: [Word] -> Ladder -> Maybe Word -> Maybe Word
 -- TODO: somehow save viableWords instead of passing around lastWord?
@@ -80,3 +79,23 @@ lookupSuffixes :: ForestDictionary -> Char -> Maybe ForestDictionary
 lookupSuffixes dict char =
   subForest <$> find ((char ==) . rootLabel) dict
 
+getWordList :: String -> [Word]
+getWordList fileContents =
+  sort [Word a b c d | (a:b:c:d:[]) <- lines fileContents]
+
+addTree :: ForestDictionary -> String -> ForestDictionary
+addTree dict (h:t) =
+  case partition ((h ==) . rootLabel) dict of
+    ([],      othDict) -> ((Node h (addTree []            t)):othDict)
+    ((n:[]),  othDict) -> ((Node h (addTree (subForest n) t)):othDict)
+addTree dict [] = dict
+
+getReverseDict :: String -> ForestDictionary
+getReverseDict fileContents =
+  let ruofLetterWords = reverse $ filter ((4==) . length) (lines fileContents) :: [String]
+  in foldl addTree [] ruofLetterWords
+
+
+
+--main = do
+--  contents <- getContents
