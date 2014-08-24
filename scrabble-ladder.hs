@@ -1,6 +1,7 @@
+import Data.Functor
 import Data.List
 import Data.Tree
-import Data.Functor
+import Data.Maybe
 import Control.Monad
 
 data Word = Word
@@ -21,10 +22,7 @@ type Ladder = [Word]
 findLadder :: Int -> Either Ladder Ladder
 -- Calculate a ladder of height 'rung'
 findLadder 0 = Right []
-findLadder rung =
-  case findLadder (rung - 1) of
-    Left doneLadder   -> Left doneLadder -- admit defeat
-    Right subLadder   -> addRung Nothing subLadder
+findLadder rung = addRung Nothing =<< findLadder (rung - 1)
 
 addRung :: Maybe Word -> Ladder -> Either Ladder Ladder
 addRung lastWord ladder
@@ -42,7 +40,7 @@ addFirstRung (Just lastWord) ladder =
 addMidRung :: Maybe Word -> Ladder -> Either Ladder Ladder
 addMidRung lastWord lad =
   -- Can we find a word that fits this rung?
-  case findWord (take 3 lad) lastWord of
+  case findWord' (take 3 lad) lastWord of
     Just word -> Right (word:lad) -- Yes we can!
     Nothing -> -- Nope. revise the ladder we've been given.
       (addRung Nothing) =<< addRung (Just (head lad)) (tail lad)
@@ -69,6 +67,45 @@ lookupSuffixes dict letter =
   case find ((letter ==) . rootLabel) dict of
     Just subDict  -> subForest subDict
     Nothing       -> []
+
+findWord' :: Ladder -> Maybe Word -> Maybe Word
+findWord' (a:b:c:[]) lastWord =
+  let { l1c = [(l4 c), (l3 b), (l2 a)]
+      ; l2c = [(l4 b), (l3 a)]
+      ; l3c = [(l4 a)]
+      -- possible first letters for new word
+      ; letters = mapM getLettersRev' [l1c, l2c, l3c] :: Maybe [[Char]]
+      ; accessors = Just [l1, l2, l3] :: Maybe [Word -> Char]
+      ; conds = liftM2 zip accessors letters :: Maybe [((Word -> Char), [Char])]
+      }
+  in actuallyFindWord' lastWord =<< conds
+
+getLettersRev' :: [Char] -> Maybe [Char]
+-- Given the first n letters of a word, find the possible n+1th letters
+getLettersRev' letters =
+  map rootLabel <$> foldM lookupSuffixes' revDict letters
+
+lookupSuffixes' :: ForestDictionary -> Char -> Maybe ForestDictionary
+-- Search the forest for char and return the relevant subforest
+lookupSuffixes' dict char =
+  subForest <$> find ((char ==) . rootLabel) dict
+
+actuallyFindWord'' :: [Word] -> Maybe Word -> [Word -> Bool] -> Maybe Word
+actuallyFindWord'' word4list (Just lastWord) conds =
+  actuallyFindWord'' (filter (lastWord <) word4list) Nothing conds
+actuallyFindWord'' word4list Nothing conds =
+  listToMaybe $ foldr filter word4list conds
+
+
+actuallyFindWord' :: Maybe Word -> [((Word -> Char), [Char])] -> Maybe Word
+actuallyFindWord' lastWordM conds =
+  let { isAfterLW = case lastWordM of
+          Nothing       -> const True
+          Just lastWord -> (lastWord <)
+      ; searchCrit = (\x -> foldl (&&) (isAfterLW x) [elem (a x) l | (a, l) <- conds]) :: Word -> Bool
+      }
+  in find searchCrit word4list
+
 
 actuallyFindWord :: [Char] -> [Char] -> [Char] -> Maybe Word -> Maybe Word
 -- TODO: speed this up by indexing or other?
