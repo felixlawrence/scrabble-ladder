@@ -1,4 +1,5 @@
 import Data.Functor
+import Data.Foldable (foldrM)
 import Data.List
 import Data.Tree
 import Data.Maybe
@@ -40,13 +41,38 @@ addFirstRung (Just lastWord) ladder =
 addMidRung :: Maybe Word -> Ladder -> Either Ladder Ladder
 addMidRung lastWord lad =
   -- Can we find a word that fits this rung?
-  case findWord' (take 3 lad) lastWord of
+  case findWord'' word4list (take 3 lad) lastWord of
     Just word -> Right (word:lad) -- Yes we can!
     Nothing -> -- Nope. revise the ladder we've been given.
       (addRung Nothing) =<< addRung (Just (head lad)) (tail lad)
       --case addRung (Just (head lad)) (tail lad) of
       --  Left lad'   -> Left lad' -- Admit defeat
       --  Right lad'  -> addRung Nothing lad'
+
+findWord'' :: [Word] -> Ladder -> Maybe Word -> Maybe Word
+-- TODO: somehow save viableWords instead of passing around lastWord?
+findWord'' wordList lad@(a:b:c:[]) (Just lastWord) =
+  -- dropWhile rather than filter - assume  that wordList is sorted alphabetically
+  findWord'' (dropWhile (lastWord <) wordList) lad Nothing
+findWord'' wordList (a:b:c:[]) Nothing =
+  let { l1c = getSuffixCond l1 [(l4 c), (l3 b), (l2 a)]
+      ; l2c = getSuffixCond l2 [(l4 b), (l3 a)]
+      ; l3c = getSuffixCond l3 [(l4 a)]
+      ; suffixConds = sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
+      ; viableWords = foldr filter wordList <$> suffixConds :: Maybe [Word]
+      }
+  in listToMaybe =<< viableWords
+
+getSuffixCond :: (Word -> Char) -> String -> Maybe (Word -> Bool)
+getSuffixCond lN revSuffix =
+  (\chars word -> elem (lN word) chars) <$> getLettersRev' revSuffix
+  --case getLettersRev' revSuffix of
+  --  Nothing -> Nothing
+  --  Just lets -> Just ((\l w -> elem (lN w) l) lets)
+
+getLettersRev :: String -> [Char]
+getLettersRev letters =
+  map rootLabel $ foldl lookupSuffixes revDict letters
 
 findWord :: Ladder -> Maybe Word -> Maybe Word
 findWord (a:b:c:[]) lastWord =
@@ -56,9 +82,6 @@ findWord (a:b:c:[]) lastWord =
       } in
     actuallyFindWord l1s l2s l3s lastWord
 
-getLettersRev :: [Char] -> [Char] -- TODO: Go to Maybe [Char]?
-getLettersRev letters =
-  map rootLabel $ foldl lookupSuffixes revDict letters
 
 lookupSuffixes :: ForestDictionary -> Char -> ForestDictionary
 lookupSuffixes dict letter =
@@ -79,6 +102,8 @@ findWord' (a:b:c:[]) lastWord =
       ; conds = liftM2 zip accessors letters :: Maybe [((Word -> Char), [Char])]
       }
   in actuallyFindWord' lastWord =<< conds
+
+
 
 getLettersRev' :: [Char] -> Maybe [Char]
 -- Given the first n letters of a word, find the possible n+1th letters
