@@ -13,11 +13,6 @@ data Word = Word
   } deriving (Eq, Show, Ord)
 
 type ForestDictionary = Forest Char
---revDict = [Node 'a' []] :: ForestDictionary
-
---word4list :: [Word]
---word4list = []
-
 type Ladder = [Word]
 
 findLadder :: [Word] -> ForestDictionary -> Int -> Either Ladder Ladder
@@ -52,8 +47,7 @@ addMidRung word4list revDict lastWord lad =
 findWord :: [Word] -> ForestDictionary -> Ladder -> Maybe Word -> Maybe Word
 -- TODO: somehow save viableWords instead of passing around lastWord?
 findWord wordList revDict lad (Just lastWord) =
-  -- dropWhile rather than filter - assume  that wordList is sorted alphabetically
-  findWord (dropWhile (lastWord <) wordList) revDict lad Nothing
+  findWord (filter (lastWord <) wordList) revDict lad Nothing
 findWord word4List revDict (a:b:c:[]) Nothing =
   let { l1c = getSuffixCond revDict l1 [(l4 c), (l3 b), (l2 a)]
       ; l2c = getSuffixCond revDict l2 [(l4 b), (l3 a)]
@@ -98,9 +92,8 @@ getReverseDict fileContents =
   in foldl addTree [] ruofLetterWords
 
 
-
 main = do
   contents <- getContents
   let word4List = getWordList contents
       revDict = getReverseDict contents
-  print $ findLadder word4List revDict 20
+  print $ findLadder word4List revDict 200
