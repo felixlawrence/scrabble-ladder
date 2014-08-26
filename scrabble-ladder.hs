@@ -1,3 +1,4 @@
+import Data.Char
 import Data.Functor
 import Data.Foldable (foldrM)
 import Data.List
@@ -10,7 +11,10 @@ data Word = Word
   , l2 :: Char
   , l3 :: Char
   , l4 :: Char
-  } deriving (Eq, Show, Ord)
+  } deriving (Eq, Ord)
+
+instance Show Word where
+  show w = map (\x -> toUpper $ x w) [l1, l2, l3, l4]
 
 type ForestDictionary = Forest Char
 type Ladder = [Word]
@@ -88,12 +92,34 @@ addTree dict [] = dict
 
 getReverseDict :: String -> ForestDictionary
 getReverseDict fileContents =
-  let ruofLetterWords = reverse $ filter ((4==) . length) (lines fileContents) :: [String]
+  let ruofLetterWords = map reverse $ filter ((4==) . length) (lines fileContents) :: [String]
   in foldl addTree [] ruofLetterWords
+
+printLadderM :: Either Ladder Ladder -> IO()
+printLadderM (Left ladder) = do
+  putStr "Didn't get the ladder you wanted"
+  putStr "Can you make do with a X rung ladder?"
+  putStr $ prettyShowLadder ladder
+printLadderM (Right ladder) = do
+  putStr $ prettyShowLadder ladder
+
+
+prettyShowLadder :: Ladder -> String
+prettyShowLadder ladder = do
+  unlines $ reverse [take 80 $ drop (mod (-i) 25) $ cycle (show w ++ replicate 21 ' ') 
+                      | (i, w) <- zip [0..] $ reverse ladder]
 
 
 main = do
   contents <- getContents
   let word4List = getWordList contents
       revDict = getReverseDict contents
-  print $ findLadder word4List revDict 200
+  printLadderM $ findLadder word4List revDict 200
+
+
+
+-- TODO List
+-- switch Word from data to type list??
+-- Get ladder bottom working
+-- Get ladder top working
+-- enforce tile limits
