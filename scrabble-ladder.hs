@@ -28,33 +28,25 @@ findLadder word4list revDicts rung =
   addRung word4list revDicts Nothing =<< findLadder word4list revDicts (rung - 1)
 
 addRung :: Word4List -> ReverseDictionaries -> Maybe Word -> Ladder -> Either Ladder Ladder
-addRung word4list revDicts lastWord ladder
-  -- For now, don't do anything clever with rows 2 and 3
-  | length ladder == 0 = addFirstRung word4list revDicts lastWord ladder
-  | otherwise = addMidRung word4list revDicts lastWord ladder
-
--- TODO: merge into addMidRung/findWord and replace addRung?
-addFirstRung :: Word4List -> ReverseDictionaries -> Maybe Word -> Ladder -> Either Ladder Ladder
-addFirstRung word4list revDicts Nothing ladder = Right ((head word4list):ladder)
-addFirstRung word4list revDicts (Just lastWord) ladder =
-  case find (lastWord <) word4list of
-    Nothing   -> Left []
-    Just word -> Right (word:ladder)
-
-addMidRung :: Word4List -> ReverseDictionaries -> Maybe Word -> Ladder -> Either Ladder Ladder
-addMidRung word4list revDicts lastWord lad =
+addRung word4list revDicts lastWord lad =
   -- Can we find a word that fits this rung?
   case findWord word4list revDicts (take 3 lad) lastWord of
     Just word -> Right (word:lad) -- Yes we can!
     Nothing -> -- Nope. revise the ladder we've been given.
-      case addRung word4list revDicts (Just (head lad)) (tail lad) of
-        Left lad'   -> Left lad -- Admit defeat
-        Right lad'  -> addRung word4list revDicts Nothing lad'
+      if lad == []
+      then Left []
+      else
+        case addRung word4list revDicts (Just (head lad)) (tail lad) of
+          Left lad'   -> Left lad -- Admit defeat
+          Right lad'  -> addRung word4list revDicts Nothing lad'
 
 findWord :: Word4List -> ReverseDictionaries -> Ladder -> Maybe Word -> Maybe Word
 -- TODO: somehow save viableWords instead of passing around lastWord?
-findWord wordList revDicts lad (Just lastWord) =
-  findWord (filter (lastWord <) wordList) revDicts lad Nothing
+findWord word4List revDicts lad (Just lastWord) =
+  findWord (filter (lastWord <) word4List) revDicts lad Nothing
+findWord word4list revDicts ([]) Nothing = 
+  listToMaybe word4list
+-- TODO: the below screams out for a refactor
 findWord word4List revDicts (a:[]) Nothing =
   let { l1c = getSuffixCond revDicts 2 l1 [(l2 a)]
       ; l2c = getSuffixCond revDicts 3 l2 [(l3 a)]
@@ -116,8 +108,8 @@ getReverseDicts sortedWords =
 
 printLadderM :: Either Ladder Ladder -> IO()
 printLadderM (Left ladder) = do
-  putStr "Didn't get the ladder you wanted"
-  putStr "Can you make do with a X rung ladder?"
+  putStrLn "Didn't get the ladder you wanted"
+  putStrLn "Can you make do with a X rung ladder?"
   putStr $ prettyShowLadder ladder
 printLadderM (Right ladder) = do
   putStr $ prettyShowLadder ladder
