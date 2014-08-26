@@ -17,53 +17,73 @@ instance Show Word where
   show w = map (\x -> toUpper $ x w) [l1, l2, l3, l4]
 
 type ForestDictionary = Forest Char
+type Word4List = [Word]
+type ReverseDictionaries = [(Int, ForestDictionary)]
 type Ladder = [Word]
 
-findLadder :: [Word] -> ForestDictionary -> Int -> Either Ladder Ladder
+findLadder :: Word4List -> ReverseDictionaries -> Int -> Either Ladder Ladder
 -- Calculate a ladder of height 'rung'
-findLadder word4list revDict 0 = Right []
-findLadder word4list revDict rung = 
-  addRung word4list revDict Nothing =<< findLadder word4list revDict (rung - 1)
+findLadder word4list revDicts 0 = Right []
+findLadder word4list revDicts rung = 
+  addRung word4list revDicts Nothing =<< findLadder word4list revDicts (rung - 1)
 
-addRung :: [Word] -> ForestDictionary -> Maybe Word -> Ladder -> Either Ladder Ladder
-addRung word4list revDict lastWord ladder
+addRung :: Word4List -> ReverseDictionaries -> Maybe Word -> Ladder -> Either Ladder Ladder
+addRung word4list revDicts lastWord ladder
   -- For now, don't do anything clever with rows 2 and 3
-  | length ladder < 3 = addFirstRung word4list revDict lastWord ladder
-  | otherwise = addMidRung word4list revDict lastWord ladder
+  | length ladder == 0 = addFirstRung word4list revDicts lastWord ladder
+  | otherwise = addMidRung word4list revDicts lastWord ladder
 
-addFirstRung :: [Word] -> ForestDictionary -> Maybe Word -> Ladder -> Either Ladder Ladder
-addFirstRung word4list revDict Nothing ladder = Right ((head word4list):ladder)
-addFirstRung word4list revDict (Just lastWord) ladder =
+-- TODO: merge into addMidRung/findWord and replace addRung?
+addFirstRung :: Word4List -> ReverseDictionaries -> Maybe Word -> Ladder -> Either Ladder Ladder
+addFirstRung word4list revDicts Nothing ladder = Right ((head word4list):ladder)
+addFirstRung word4list revDicts (Just lastWord) ladder =
   case find (lastWord <) word4list of
     Nothing   -> Left []
     Just word -> Right (word:ladder)
 
-addMidRung :: [Word] -> ForestDictionary -> Maybe Word -> Ladder -> Either Ladder Ladder
-addMidRung word4list revDict lastWord lad =
+addMidRung :: Word4List -> ReverseDictionaries -> Maybe Word -> Ladder -> Either Ladder Ladder
+addMidRung word4list revDicts lastWord lad =
   -- Can we find a word that fits this rung?
-  case findWord word4list revDict (take 3 lad) lastWord of
+  case findWord word4list revDicts (take 3 lad) lastWord of
     Just word -> Right (word:lad) -- Yes we can!
     Nothing -> -- Nope. revise the ladder we've been given.
-      case addRung word4list revDict (Just (head lad)) (tail lad) of
+      case addRung word4list revDicts (Just (head lad)) (tail lad) of
         Left lad'   -> Left lad -- Admit defeat
-        Right lad'  -> addRung word4list revDict Nothing lad'
+        Right lad'  -> addRung word4list revDicts Nothing lad'
 
-findWord :: [Word] -> ForestDictionary -> Ladder -> Maybe Word -> Maybe Word
+findWord :: Word4List -> ReverseDictionaries -> Ladder -> Maybe Word -> Maybe Word
 -- TODO: somehow save viableWords instead of passing around lastWord?
-findWord wordList revDict lad (Just lastWord) =
-  findWord (filter (lastWord <) wordList) revDict lad Nothing
-findWord word4List revDict (a:b:c:[]) Nothing =
-  let { l1c = getSuffixCond revDict l1 [(l4 c), (l3 b), (l2 a)]
-      ; l2c = getSuffixCond revDict l2 [(l4 b), (l3 a)]
-      ; l3c = getSuffixCond revDict l3 [(l4 a)]
+findWord wordList revDicts lad (Just lastWord) =
+  findWord (filter (lastWord <) wordList) revDicts lad Nothing
+findWord word4List revDicts (a:[]) Nothing =
+  let { l1c = getSuffixCond revDicts 2 l1 [(l2 a)]
+      ; l2c = getSuffixCond revDicts 3 l2 [(l3 a)]
+      ; l3c = getSuffixCond revDicts 4 l3 [(l4 a)]
+      ; suffixConds = sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
+      ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
+      }
+  in listToMaybe =<< viableWords
+findWord word4List revDicts (a:b:[]) Nothing =
+  let { l1c = getSuffixCond revDicts 3 l1 [(l3 b), (l2 a)]
+      ; l2c = getSuffixCond revDicts 4 l2 [(l4 b), (l3 a)]
+      ; l3c = getSuffixCond revDicts 4 l3 [(l4 a)]
+      ; suffixConds = sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
+      ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
+      }
+  in listToMaybe =<< viableWords
+findWord word4List revDicts (a:b:c:[]) Nothing =
+  let { l1c = getSuffixCond revDicts 4 l1 [(l4 c), (l3 b), (l2 a)]
+      ; l2c = getSuffixCond revDicts 4 l2 [(l4 b), (l3 a)]
+      ; l3c = getSuffixCond revDicts 4 l3 [(l4 a)]
       ; suffixConds = sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
       }
   in listToMaybe =<< viableWords
 
-getSuffixCond :: ForestDictionary -> (Word -> Char) -> String -> Maybe (Word -> Bool)
-getSuffixCond revDict lN revSuffix =
-  (\chars word -> elem (lN word) chars) <$> getLettersRev revDict revSuffix
+getSuffixCond :: ReverseDictionaries -> Int -> (Word -> Char) -> String -> Maybe (Word -> Bool)
+getSuffixCond revDicts wordLen lN revSuffix =
+  let revDict = fromJust $ lookup wordLen revDicts
+  in (\chars word -> elem (lN word) chars) <$> getLettersRev revDict revSuffix
   --case getLettersRev revSuffix of
   --  Nothing -> Nothing
   --  Just lets -> Just ((\l w -> elem (lN w) l) lets)
@@ -78,9 +98,9 @@ lookupSuffixes :: ForestDictionary -> Char -> Maybe ForestDictionary
 lookupSuffixes dict char =
   subForest <$> find ((char ==) . rootLabel) dict
 
-getWordList :: String -> [Word]
-getWordList fileContents =
-  sort [Word a b c d | (a:b:c:d:[]) <- lines fileContents]
+getWord4List :: [String] -> [Word]
+getWord4List sortedWords =
+  [Word a b c d | (a:b:c:d:[]) <- sortedWords]
 
 addTree :: ForestDictionary -> String -> ForestDictionary
 addTree dict (h:t) =
@@ -90,10 +110,9 @@ addTree dict (h:t) =
     otherwise          -> error "duplicate trees"
 addTree dict [] = dict
 
-getReverseDict :: String -> ForestDictionary
-getReverseDict fileContents =
-  let ruofLetterWords = map reverse $ filter ((4==) . length) (lines fileContents) :: [String]
-  in foldl addTree [] ruofLetterWords
+getReverseDicts :: [String] -> [(Int, ForestDictionary)]
+getReverseDicts sortedWords =
+  [(i, foldl addTree [] $ map reverse $ filter ((4==) . length)  sortedWords) | i <- [2..4]]
 
 printLadderM :: Either Ladder Ladder -> IO()
 printLadderM (Left ladder) = do
@@ -112,14 +131,14 @@ prettyShowLadder ladder = do
 
 main = do
   contents <- getContents
-  let word4List = getWordList contents
-      revDict = getReverseDict contents
-  printLadderM $ findLadder word4List revDict 200
+  let sortedWords = sort $ lines $ map toUpper contents
+      word4List = getWord4List sortedWords
+      revDicts = getReverseDicts sortedWords
+  printLadderM $ findLadder word4List revDicts 200
 
 
 
 -- TODO List
 -- switch Word from data to type list??
--- Get ladder bottom working
 -- Get ladder top working
 -- enforce tile limits
