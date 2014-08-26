@@ -46,27 +46,15 @@ findWord word4List revDicts lad (Just lastWord) =
   findWord (filter (lastWord <) word4List) revDicts lad Nothing
 findWord word4list revDicts ([]) Nothing = 
   listToMaybe word4list
--- TODO: the below screams out for a refactor
-findWord word4List revDicts (a:[]) Nothing =
-  let { l1c = getSuffixCond revDicts 2 l1 [(l2 a)]
-      ; l2c = getSuffixCond revDicts 3 l2 [(l3 a)]
-      ; l3c = getSuffixCond revDicts 4 l3 [(l4 a)]
-      ; suffixConds = sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
-      ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
-      }
-  in listToMaybe =<< viableWords
-findWord word4List revDicts (a:b:[]) Nothing =
-  let { l1c = getSuffixCond revDicts 3 l1 [(l3 b), (l2 a)]
-      ; l2c = getSuffixCond revDicts 4 l2 [(l4 b), (l3 a)]
-      ; l3c = getSuffixCond revDicts 4 l3 [(l4 a)]
-      ; suffixConds = sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
-      ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
-      }
-  in listToMaybe =<< viableWords
-findWord word4List revDicts (a:b:c:[]) Nothing =
-  let { l1c = getSuffixCond revDicts 4 l1 [(l4 c), (l3 b), (l2 a)]
-      ; l2c = getSuffixCond revDicts 4 l2 [(l4 b), (l3 a)]
-      ; l3c = getSuffixCond revDicts 4 l3 [(l4 a)]
+findWord word4List revDicts l Nothing =
+  let { l3c =                getSuffixCond revDicts 4 l3 [(l4 (l !! 0))]
+      ; l2c = case length l of
+                1         -> getSuffixCond revDicts 3 l2 [(l3 (l !! 0))]
+                otherwise -> getSuffixCond revDicts 4 l2 [(l4 (l !! 1)), (l3 (l !! 0))]
+      ; l1c = case length l of
+                1         -> getSuffixCond revDicts 2 l1 [(l2 (l !! 0))]
+                2         -> getSuffixCond revDicts 4 l2 [(l4 (l !! 1)), (l3 (l !! 0))]
+                otherwise -> getSuffixCond revDicts 4 l1 [(l4 (l !! 2)), (l3 (l !! 1)), (l2 (l !! 0))]
       ; suffixConds = sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
       }
