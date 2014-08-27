@@ -20,33 +20,34 @@ type ForestDictionary = Forest Char
 type Word4List = [Word]
 type ReverseDictionaries = [(Int, ForestDictionary)]
 type Ladder = [Word]
+type Tiles = [Char]
 
-findLadder :: Word4List -> ReverseDictionaries -> Int -> Either Ladder Ladder
+findLadder :: (Word4List, ReverseDictionaries, Tiles) -> Int -> Either Ladder Ladder
 -- Calculate a ladder of height 'rung'
-findLadder word4list revDicts 0 = Right []
-findLadder word4list revDicts rung = 
-  addRung word4list revDicts Nothing =<< findLadder word4list revDicts (rung - 1)
+findLadder context 0 = Right []
+findLadder context rung = 
+  addRung context Nothing =<< findLadder context (rung - 1)
 
-addRung :: Word4List -> ReverseDictionaries -> Maybe Word -> Ladder -> Either Ladder Ladder
-addRung word4list revDicts lastWord lad =
+addRung :: (Word4List, ReverseDictionaries, Tiles) -> Maybe Word -> Ladder -> Either Ladder Ladder
+addRung context@(word4List, revDicts, allTiles) lastWord lad =
   -- Can we find a word that fits this rung?
-  case findWord word4list revDicts (take 3 lad) lastWord of
+  case findWord word4List revDicts (tt allTiles lad) (take 3 lad) lastWord of
     Just word -> Right (word:lad) -- Yes we can!
     Nothing -> -- Nope. revise the ladder we've been given.
       if lad == []
       then Left []
       else
-        case addRung word4list revDicts (Just (head lad)) (tail lad) of
+        case addRung context (Just (head lad)) (tail lad) of
           Left lad'   -> Left lad -- Admit defeat
-          Right lad'  -> addRung word4list revDicts Nothing lad'
+          Right lad'  -> addRung context Nothing lad'
 
-findWord :: Word4List -> ReverseDictionaries -> Ladder -> Maybe Word -> Maybe Word
+findWord :: Word4List -> ReverseDictionaries -> Tiles -> Ladder -> Maybe Word -> Maybe Word
 -- TODO: somehow save viableWords instead of passing around lastWord?
-findWord word4List revDicts lad (Just lastWord) =
-  findWord (filter (lastWord <) word4List) revDicts lad Nothing
-findWord word4list revDicts ([]) Nothing = 
-  listToMaybe word4list
-findWord word4List revDicts l Nothing =
+findWord word4List revDicts tiles lad (Just lastWord) =
+  findWord (filter (lastWord <) word4List) revDicts tiles lad Nothing
+findWord word4list revDicts tiles ([]) Nothing = 
+  listToMaybe $ filter (tilesAllow tiles) word4list
+findWord word4List revDicts tiles l Nothing =
   let { l3c =                getSuffixCond revDicts 4 l3 [(l4 (l !! 0))]
       ; l2c = case length l of
                 1         -> getSuffixCond revDicts 3 l2 [(l3 (l !! 0))]
@@ -55,7 +56,7 @@ findWord word4List revDicts l Nothing =
                 1         -> getSuffixCond revDicts 2 l1 [(l2 (l !! 0))]
                 2         -> getSuffixCond revDicts 4 l2 [(l4 (l !! 1)), (l3 (l !! 0))]
                 otherwise -> getSuffixCond revDicts 4 l1 [(l4 (l !! 2)), (l3 (l !! 1)), (l2 (l !! 0))]
-      ; suffixConds = sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
+      ; suffixConds = (:) (tilesAllow tiles) <$> sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
       }
   in listToMaybe =<< viableWords
@@ -78,6 +79,14 @@ lookupSuffixes :: ForestDictionary -> Char -> Maybe ForestDictionary
 lookupSuffixes dict char =
   subForest <$> find ((char ==) . rootLabel) dict
 
+tilesAllow :: Tiles -> Word -> Bool
+tilesAllow tiles word =
+  [] == ((show word) \\ tiles)
+
+tt :: Tiles -> Ladder -> Tiles
+tt tiles ladder =
+  (\\) tiles $ concat $ map show ladder
+
 getWord4List :: [String] -> [Word]
 getWord4List sortedWords =
   [Word a b c d | (a:b:c:d:[]) <- sortedWords]
@@ -94,13 +103,17 @@ getReverseDicts :: [String] -> [(Int, ForestDictionary)]
 getReverseDicts sortedWords =
   [(i, foldl addTree [] $ map reverse $ filter ((4==) . length)  sortedWords) | i <- [2..4]]
 
-printLadderM :: Either Ladder Ladder -> IO()
-printLadderM (Left ladder) = do
+printLadderM :: Tiles -> Either Ladder Ladder -> IO()
+printLadderM allTiles (Left ladder) = do
   putStrLn "Didn't get the ladder you wanted"
   putStrLn "Can you make do with a X rung ladder?"
   putStr $ prettyShowLadder ladder
-printLadderM (Right ladder) = do
+  putStrLn "\nLeftover tiles:"
+  putStrLn $ tt allTiles ladder
+printLadderM allTiles (Right ladder) = do
   putStr $ prettyShowLadder ladder
+  putStrLn "\nLeftover tiles:"
+  putStrLn $ tt allTiles ladder
 
 
 prettyShowLadder :: Ladder -> String
@@ -114,11 +127,11 @@ main = do
   let sortedWords = sort $ lines $ map toUpper contents
       word4List = getWord4List sortedWords
       revDicts = getReverseDicts sortedWords
-  printLadderM $ findLadder word4List revDicts 200
+      allTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ"
+  printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) 24
 
 
 
 -- TODO List
 -- switch Word from data to type list??
 -- Get ladder top working
--- enforce tile limits
