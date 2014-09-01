@@ -6,16 +6,8 @@ import Data.Tree
 import Data.Maybe
 import Control.Monad
 
-data Word = Word
-  { l1 :: Char
-  , l2 :: Char
-  , l3 :: Char
-  , l4 :: Char
-  } deriving (Eq, Ord)
 
-instance Show Word where
-  show w = map (\x -> toUpper $ x w) [l1, l2, l3, l4]
-
+type Word = String
 type ForestDictionary = Forest Char
 type Word4List = [Word]
 type ReverseDictionaries = [(Int, ForestDictionary)]
@@ -48,14 +40,14 @@ findWord word4List revDicts tiles lad (Just lastWord) =
 findWord word4list revDicts tiles ([]) Nothing = 
   listToMaybe $ filter (tilesAllow tiles) word4list
 findWord word4List revDicts tiles l Nothing =
-  let { l3c =                getSuffixCond revDicts 4 l3 [(l4 (l !! 0))]
+  let { l3c =                getSuffixCond revDicts 4 (flip (!!) 2) [(l !! 0) !! 3]
       ; l2c = case length l of
-                1         -> getSuffixCond revDicts 3 l2 [(l3 (l !! 0))]
-                otherwise -> getSuffixCond revDicts 4 l2 [(l4 (l !! 1)), (l3 (l !! 0))]
+                1         -> getSuffixCond revDicts 3 (flip (!!) 1) [(l !! 0) !! 2]
+                otherwise -> getSuffixCond revDicts 4 (flip (!!) 1) [(l !! 1) !! 3, (l !! 0) !! 2]
       ; l1c = case length l of
-                1         -> getSuffixCond revDicts 2 l1 [(l2 (l !! 0))]
-                2         -> getSuffixCond revDicts 4 l2 [(l4 (l !! 1)), (l3 (l !! 0))]
-                otherwise -> getSuffixCond revDicts 4 l1 [(l4 (l !! 2)), (l3 (l !! 1)), (l2 (l !! 0))]
+                1         -> getSuffixCond revDicts 2 (flip (!!) 0) [(l !! 0) !! 1]
+                2         -> getSuffixCond revDicts 3 (flip (!!) 0) [(l !! 1) !! 2, (l !! 0) !! 1]
+                otherwise -> getSuffixCond revDicts 4 (flip (!!) 0) [(l !! 2) !! 3, (l !! 1) !! 2, (l !! 0) !! 1]
       ; suffixConds = (:) (tilesAllow tiles) <$> sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
       }
@@ -81,15 +73,15 @@ lookupSuffixes dict char =
 
 tilesAllow :: Tiles -> Word -> Bool
 tilesAllow tiles word =
-  [] == ((show word) \\ tiles)
+  [] == (word \\ tiles)
 
 tt :: Tiles -> Ladder -> Tiles
 tt tiles ladder =
-  (\\) tiles $ concat $ map show ladder
+  (\\) tiles $ concat ladder
 
 getWord4List :: [String] -> [Word]
-getWord4List sortedWords =
-  [Word a b c d | (a:b:c:d:[]) <- sortedWords]
+getWord4List =
+  filter ((4==) . length)
 
 addTree :: ForestDictionary -> String -> ForestDictionary
 addTree dict (h:t) =
@@ -106,7 +98,7 @@ getReverseDicts sortedWords =
 printLadderM :: Tiles -> Either Ladder Ladder -> IO()
 printLadderM allTiles (Left ladder) = do
   putStrLn "Didn't get the ladder you wanted"
-  putStrLn "Can you make do with a X rung ladder?"
+  putStrLn "Can you make do with a shorter ladder?"
   putStr $ prettyShowLadder ladder
   putStrLn "\nLeftover tiles:"
   putStrLn $ tt allTiles ladder
@@ -115,10 +107,9 @@ printLadderM allTiles (Right ladder) = do
   putStrLn "\nLeftover tiles:"
   putStrLn $ tt allTiles ladder
 
-
 prettyShowLadder :: Ladder -> String
 prettyShowLadder ladder = do
-  unlines $ reverse [take 80 $ drop (mod (-i) 25) $ cycle (show w ++ replicate 21 ' ') 
+  unlines $ reverse [take 80 $ drop (mod (-i) 25) $ cycle (w ++ replicate 21 ' ') 
                       | (i, w) <- zip [0..] $ reverse ladder]
 
 
@@ -128,10 +119,12 @@ main = do
       word4List = getWord4List sortedWords
       revDicts = getReverseDicts sortedWords
       allTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ"
-  printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) 24
+  printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) 23
 
 
 
 -- TODO List
 -- switch Word from data to type list??
+-- Internally, have the ladder as the filtered word4list, and we just take the head of it at the end
 -- Get ladder top working
+-- blanks??
