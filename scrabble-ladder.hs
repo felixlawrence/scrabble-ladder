@@ -40,31 +40,33 @@ findWord word4List revDicts tiles lad (Just lastWord) =
 findWord word4list revDicts tiles ([]) Nothing = 
   listToMaybe $ filter (tilesAllow tiles) word4list
 findWord word4List revDicts tiles l Nothing =
-  let { l3c =                getSuffixCond revDicts 4 (flip (!!) 2) [(l !! 0) !! 3]
-      ; l2c = case length l of
-                1         -> getSuffixCond revDicts 3 (flip (!!) 1) [(l !! 0) !! 2]
-                otherwise -> getSuffixCond revDicts 4 (flip (!!) 1) [(l !! 1) !! 3, (l !! 0) !! 2]
+  let { getDict = (\wordLen -> fromJust $ lookup wordLen revDicts) :: Int -> ForestDictionary
+      ; l2c =                getSuffixCond (getDict 4) 2 (getSuffix 2 l)
       ; l1c = case length l of
-                1         -> getSuffixCond revDicts 2 (flip (!!) 0) [(l !! 0) !! 1]
-                2         -> getSuffixCond revDicts 3 (flip (!!) 0) [(l !! 1) !! 2, (l !! 0) !! 1]
-                otherwise -> getSuffixCond revDicts 4 (flip (!!) 0) [(l !! 2) !! 3, (l !! 1) !! 2, (l !! 0) !! 1]
-      ; suffixConds = (:) (tilesAllow tiles) <$> sequence [l1c, l2c, l3c] :: Maybe [(Word -> Bool)]
+                1         -> getSuffixCond (getDict 3) 1 (getSuffix 1 l)
+                otherwise -> getSuffixCond (getDict 4) 1 (getSuffix 1 l)
+      ; l0c = case length l of
+                1         -> getSuffixCond (getDict 2) 0 (getSuffix 0 l)
+                2         -> getSuffixCond (getDict 3) 0 (getSuffix 0 l)
+                otherwise -> getSuffixCond (getDict 4) 0 (getSuffix 0 l)
+      ; suffixConds = (:) (tilesAllow tiles) <$> sequence [l0c, l1c, l2c] :: Maybe [(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
       }
   in listToMaybe =<< viableWords
 
-getSuffixCond :: ReverseDictionaries -> Int -> (Word -> Char) -> String -> Maybe (Word -> Bool)
-getSuffixCond revDicts wordLen lN revSuffix =
-  let revDict = fromJust $ lookup wordLen revDicts
-  in (\chars word -> elem (lN word) chars) <$> getLettersRev revDict revSuffix
-  --case getLettersRev revSuffix of
-  --  Nothing -> Nothing
-  --  Just lets -> Just ((\l w -> elem (lN w) l) lets)
+getSuffix :: Int -> Ladder -> String
+getSuffix letterNumber ladder =
+  -- TODO: simplify with foldr??
+  foldl (\s (i, w) -> (w !! i):s) [] $ zip [3,2,1] $ reverse $ take (3 - letterNumber) ladder
+
+getSuffixCond :: ForestDictionary -> Int -> String -> Maybe (Word -> Bool)
+getSuffixCond revDict letterNumber revSuffix =
+  (\chars word -> elem (word !! letterNumber) chars) <$> getLettersRev revDict revSuffix
 
 getLettersRev :: ForestDictionary -> [Char] -> Maybe [Char]
--- Given the first n letters of a word, find the possible n+1th letters
+-- Given the last n letters of a word, find the possible n+1th letters
 getLettersRev revDict letters =
-  map rootLabel <$> foldM lookupSuffixes revDict letters
+  map rootLabel <$> foldM lookupSuffixes revDict (reverse letters)
 
 lookupSuffixes :: ForestDictionary -> Char -> Maybe ForestDictionary
 -- Search the forest for char and return the relevant subforest
@@ -119,7 +121,7 @@ main = do
       word4List = getWord4List sortedWords
       revDicts = getReverseDicts sortedWords
       allTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ"
-  printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) 23
+  printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) 24
 
 
 
