@@ -40,16 +40,11 @@ findWord word4List revDicts tiles lad (Just lastWord) =
 findWord word4list revDicts tiles ([]) Nothing = 
   listToMaybe $ filter (tilesAllow tiles) word4list
 findWord word4List revDicts tiles l Nothing =
-  let { getDict = (\wordLen -> fromJust $ lookup wordLen revDicts) :: Int -> ForestDictionary
-      ; l2c =                getSuffixCond (getDict 4) 2 (getSuffix 2 l)
-      ; l1c = case length l of
-                1         -> getSuffixCond (getDict 3) 1 (getSuffix 1 l)
-                otherwise -> getSuffixCond (getDict 4) 1 (getSuffix 1 l)
-      ; l0c = case length l of
-                1         -> getSuffixCond (getDict 2) 0 (getSuffix 0 l)
-                2         -> getSuffixCond (getDict 3) 0 (getSuffix 0 l)
-                otherwise -> getSuffixCond (getDict 4) 0 (getSuffix 0 l)
-      ; suffixConds = (:) (tilesAllow tiles) <$> sequence [l0c, l1c, l2c] :: Maybe [(Word -> Bool)]
+  let { getDictN = (\wordLen -> fromJust $ lookup wordLen revDicts) :: Int -> ForestDictionary
+      ; getDictL = (\l i -> getDictN (min 4 (1 + i + (length l)))):: Ladder -> Int -> ForestDictionary
+      ; suffixConds = foldM 
+          (\condList i -> (flip (:) condList <$> getSuffixCond (getDictL l i) i (getSuffix i l)))
+          [tilesAllow tiles] [0..2] :: Maybe[(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
       }
   in listToMaybe =<< viableWords
@@ -60,6 +55,7 @@ getSuffix letterNumber ladder =
 
 getSuffixCond :: ForestDictionary -> Int -> String -> Maybe (Word -> Bool)
 getSuffixCond revDict letterNumber revSuffix =
+  -- TODO: move heavy lifting from findWord let statement into here?
   (\chars word -> elem (word !! letterNumber) chars) <$> getLettersRev revDict revSuffix
 
 getLettersRev :: ForestDictionary -> [Char] -> Maybe [Char]
@@ -125,7 +121,6 @@ main = do
 
 
 -- TODO List
--- switch Word from data to type list??
 -- Internally, have the ladder as the filtered word4list, and we just take the head of it at the end
 -- Get ladder top working
 -- blanks??
