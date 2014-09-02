@@ -56,8 +56,7 @@ findWord word4List revDicts tiles l Nothing =
 
 getSuffix :: Int -> Ladder -> String
 getSuffix letterNumber ladder =
-  -- TODO: simplify with foldr??
-  foldl (\s (i, w) -> (w !! i):s) [] $ zip [3,2,1] $ reverse $ take (3 - letterNumber) ladder
+  foldr (\(i, w) s -> (w !! (i+1)):s) [] $ take (3 - letterNumber) $ zip [letterNumber..] ladder
 
 getSuffixCond :: ForestDictionary -> Int -> String -> Maybe (Word -> Bool)
 getSuffixCond revDict letterNumber revSuffix =
@@ -95,7 +94,7 @@ addTree dict [] = dict
 
 getReverseDicts :: [String] -> [(Int, ForestDictionary)]
 getReverseDicts sortedWords =
-  [(i, foldl addTree [] $ map reverse $ filter ((4==) . length)  sortedWords) | i <- [2..4]]
+  [(i, foldl addTree [] $ map reverse $ filter ((i==) . length)  sortedWords) | i <- [2..4]]
 
 printLadderM :: Tiles -> Either Ladder Ladder -> IO()
 printLadderM allTiles (Left ladder) = do
