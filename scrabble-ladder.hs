@@ -11,47 +11,50 @@ type Word = String
 type ForestDictionary = Forest Char
 type Word4List = [Word]
 type ReverseDictionaries = [(Int, ForestDictionary)]
-type Ladder = [Word]
+type Ladder = [Word4List]
 type Tiles = [Char]
 
 findLadder :: (Word4List, ReverseDictionaries, Tiles) -> Int -> Either Ladder Ladder
 -- Calculate a ladder of height 'rung'
-findLadder context 0 = Right []
+findLadder (word4List, _, _) 1 = Right [word4List]
 findLadder context rung = 
-  addRung context Nothing =<< findLadder context (rung - 1)
+  addRung context =<< findLadder context (rung - 1)
 
-addRung :: (Word4List, ReverseDictionaries, Tiles) -> Maybe Word -> Ladder -> Either Ladder Ladder
-addRung context@(word4List, revDicts, allTiles) lastWord lad =
-  -- Can we find a word that fits this rung?
-  case findWord word4List revDicts (tt allTiles lad) (take 3 lad) lastWord of
-    Just word -> Right (word:lad) -- Yes we can!
-    Nothing -> -- Nope. revise the ladder we've been given.
-      if lad == []
-      then Left []
-      else
-        case addRung context (Just (head lad)) (tail lad) of
-          Left lad'   -> Left lad -- Admit defeat
-          Right lad'  -> addRung context Nothing lad'
+addRung :: (Word4List, ReverseDictionaries, Tiles) -> Ladder -> Either Ladder Ladder
+addRung context@(word4List, revDicts, allTiles) [] = Left [] -- Give up.
+addRung context@(word4List, revDicts, allTiles) lad@([]:h':t) =
+  -- Go deeper...
+  addRung context =<< addRung context ((tailOr h'):t)
+addRung context@(word4List, revDicts, allTiles) lad@(h:t) =
+  -- Can we find some words that fit this rung?
+  case findWords word4List revDicts (tt allTiles lad) (take 3 lad) of
+    [] -> -- Nope. revise the ladder we've been given.
+      addRung context ((tailOr h):t)
+    words -> Right (words:lad)
 
-findWord :: Word4List -> ReverseDictionaries -> Tiles -> Ladder -> Maybe Word -> Maybe Word
--- TODO: somehow save viableWords instead of passing around lastWord?
-findWord word4List revDicts tiles lad (Just lastWord) =
-  findWord (filter (lastWord <) word4List) revDicts tiles lad Nothing
-findWord word4list revDicts tiles ([]) Nothing = 
-  listToMaybe $ filter (tilesAllow tiles) word4list
-findWord word4List revDicts tiles l Nothing =
+tailOr :: [a] -> [a]
+tailOr [] = []
+tailOr (_:t) = t
+
+findWords :: Word4List -> ReverseDictionaries -> Tiles -> Ladder -> Word4List
+-- TODO: use the fact that lad is only length 3
+findWords word4list revDicts tiles [] = 
+  word4list -- TODO: is this redundant?
+findWords word4List revDicts tiles l =
   let { getDictN = (\wordLen -> fromJust $ lookup wordLen revDicts) :: Int -> ForestDictionary
       ; getDictL = (\l i -> getDictN (min 4 (1 + i + (length l)))):: Ladder -> Int -> ForestDictionary
       ; suffixConds = foldM 
           (\condList i -> (flip (:) condList <$> getSuffixCond (getDictL l i) i (getSuffix i l)))
           [tilesAllow tiles] [0..2] :: Maybe[(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
-      }
-  in listToMaybe =<< viableWords
+      } in
+    case viableWords of
+      Nothing -> []
+      Just words -> words
 
 getSuffix :: Int -> Ladder -> String
 getSuffix letterNumber ladder =
-  foldr (\(i, w) s -> (w !! (i+1)):s) [] $ take (3 - letterNumber) $ zip [letterNumber..] ladder
+  foldr (\(i, w) s -> (w !! (i+1)):s) [] $ take (3 - letterNumber) $ zip [letterNumber..] (map head ladder)
 
 getSuffixCond :: ForestDictionary -> Int -> String -> Maybe (Word -> Bool)
 getSuffixCond revDict letterNumber revSuffix =
@@ -74,7 +77,7 @@ tilesAllow tiles word =
 
 tt :: Tiles -> Ladder -> Tiles
 tt tiles ladder =
-  (\\) tiles $ concat ladder
+  (\\) tiles $ concat (map head ladder)
 
 getWord4List :: [String] -> [Word]
 getWord4List =
@@ -107,7 +110,7 @@ printLadderM allTiles (Right ladder) = do
 prettyShowLadder :: Ladder -> String
 prettyShowLadder ladder = do
   unlines $ reverse [take 80 $ drop (mod (-i) 25) $ cycle (w ++ replicate 21 ' ') 
-                      | (i, w) <- zip [0..] $ reverse ladder]
+                      | (i, w) <- zip [0..] $ reverse (map head ladder)]
 
 
 main = do
@@ -121,6 +124,5 @@ main = do
 
 
 -- TODO List
--- Internally, have the ladder as the filtered word4list, and we just take the head of it at the end
 -- Get ladder top working
 -- blanks??
