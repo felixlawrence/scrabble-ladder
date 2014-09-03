@@ -24,17 +24,13 @@ addRung :: (Word4List, ReverseDictionaries, Tiles) -> Ladder -> Either Ladder La
 addRung context@(word4List, revDicts, allTiles) [] = Left [] -- Give up.
 addRung context@(word4List, revDicts, allTiles) lad@([]:h':t) =
   -- Go deeper...
-  addRung context =<< addRung context ((tailOr h'):t)
+  addRung context =<< addRung context ((drop 1 h'):t)
 addRung context@(word4List, revDicts, allTiles) lad@(h:t) =
   -- Can we find some words that fit this rung?
   case findWords word4List revDicts (tt allTiles lad) (take 3 lad) of
     [] -> -- Nope. revise the ladder we've been given.
-      addRung context ((tailOr h):t)
+      addRung context ((drop 1 h):t)
     words -> Right (words:lad)
-
-tailOr :: [a] -> [a]
-tailOr [] = []
-tailOr (_:t) = t
 
 findWords :: Word4List -> ReverseDictionaries -> Tiles -> Ladder -> Word4List
 -- TODO: use the fact that lad is only length 3
@@ -43,9 +39,8 @@ findWords word4list revDicts tiles [] =
 findWords word4List revDicts tiles l =
   let { getDictN = (\wordLen -> fromJust $ lookup wordLen revDicts) :: Int -> ForestDictionary
       ; getDictL = (\l i -> getDictN (min 4 (1 + i + (length l)))):: Ladder -> Int -> ForestDictionary
-      ; suffixConds = foldM 
-          (\condList i -> (flip (:) condList <$> getSuffixCond (getDictL l i) i (getSuffix i l)))
-          [tilesAllow tiles] [0..2] :: Maybe[(Word -> Bool)]
+      ; getSuffixCondI = (\i -> getSuffixCond (getDictL l i) i (getSuffix i l)) :: Int -> Maybe (Word -> Bool)
+      ; suffixConds = sequence $ (Just (tilesAllow tiles)):(map getSuffixCondI [0..2]) :: Maybe[(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
       } in
     case viableWords of
@@ -119,7 +114,7 @@ main = do
       word4List = getWord4List sortedWords
       revDicts = getReverseDicts sortedWords
       allTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ"
-  printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) 24
+  printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) 23
 
 
 
