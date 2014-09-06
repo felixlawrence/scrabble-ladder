@@ -6,10 +6,12 @@ import Data.Tree
 import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Data.Vector as Vector
+import Data.Vector (Vector, (!), toList)
 import Control.Monad
 
 
-type Word = String
+type Word = Vector Char
 type ForestDictionary = Forest Char
 type Word4List = [Word]
 type ReverseDictionaries = [(Int, ForestDictionary)]
@@ -50,12 +52,12 @@ findWords word4List revDicts tiles l =
 
 getSuffix :: Int -> Ladder -> String
 getSuffix letterNumber ladder =
-  foldr (\(i, w) s -> (w !! (i+1)):s) [] $ take (3 - letterNumber) $ zip [letterNumber..] (map head ladder)
+  foldr (\(i, w) s -> (w ! (i+1)):s) [] $ take (3 - letterNumber) $ zip [letterNumber..] (map head ladder)
 
 getSuffixCond :: ForestDictionary -> Int -> String -> Maybe (Word -> Bool)
 getSuffixCond revDict letterNumber revSuffix =
   -- TODO: move heavy lifting from findWord let statement into here?
-  (\chars word -> Set.member ({-# SCC bangbang #-} word !! letterNumber) chars) <$> getLettersRev revDict revSuffix
+  (\chars word -> Set.member ({-# SCC bangbang #-} word ! letterNumber) chars) <$> getLettersRev revDict revSuffix
 
 getLettersRev :: ForestDictionary -> [Char] -> Maybe (Set Char)
 -- Given the last n letters of a word, find the possible n+1th letters
@@ -69,14 +71,14 @@ lookupSuffixes dict char = subForest <$> find ((char ==) . rootLabel) dict
 tilesAllow :: Tiles -> Word -> Bool
 tilesAllow tiles word =
   --all (flip elem $ group tiles) (group $ sort word) -- FIXME: wrong
-  [] == (word \\ tiles)
+  [] == ((toList word) \\ tiles)
 
 tt :: Tiles -> Ladder -> Tiles
-tt tiles ladder = (\\) tiles $ concat (map head ladder)
+tt tiles ladder = (\\) tiles $ concat (map (toList . head) ladder)
   --foldl (\\) tiles $ (map head ladder) -- slower because \\ is slow
 
 getWord4List :: [String] -> [Word]
-getWord4List = filter ((4==) . length)
+getWord4List wl = map Vector.fromList $ filter ((4==) . length) wl
 
 addTree :: ForestDictionary -> String -> ForestDictionary
 addTree dict (h:t) =
@@ -105,7 +107,7 @@ printLadderM allTiles (Right ladder) = do
 prettyShowLadder :: Ladder -> String
 prettyShowLadder ladder = do
   unlines $ reverse [take 80 $ drop (mod (-i) 25) $ cycle (w ++ replicate 21 ' ') 
-                      | (i, w) <- zip [0..] $ reverse (map head ladder)]
+                      | (i, w) <- zip [0..] $ reverse (map (Vector.toList . head) ladder)]
 
 
 main = do
