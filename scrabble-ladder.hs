@@ -4,6 +4,8 @@ import Data.Foldable (foldrM)
 import Data.List
 import Data.Tree
 import Data.Maybe
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Control.Monad
 
 
@@ -17,25 +19,24 @@ type Tiles = [Char]
 findLadder :: (Word4List, ReverseDictionaries, Tiles) -> Int -> Either Ladder Ladder
 -- Calculate a ladder of height 'rung'
 findLadder (word4List, _, _) 1 = Right [word4List]
-findLadder context rung = 
-  addRung context =<< findLadder context (rung - 1)
+findLadder context rung = addRung context =<< findLadder context (rung - 1)
 
 addRung :: (Word4List, ReverseDictionaries, Tiles) -> Ladder -> Either Ladder Ladder
-addRung context@(word4List, revDicts, allTiles) [] = Left [] -- Give up.
-addRung context@(word4List, revDicts, allTiles) lad@([]:h':t) =
-  -- Go deeper...
-  addRung context =<< addRung context ((drop 1 h'):t)
-addRung context@(word4List, revDicts, allTiles) lad@(h:t) =
+addRung context@(word4List, revDicts, allTiles) lad =
   -- Can we find some words that fit this rung?
   case findWords word4List revDicts (tt allTiles lad) (take 3 lad) of
-    [] -> -- Nope. revise the ladder we've been given.
-      addRung context ((drop 1 h):t)
+    [] -> addRung context =<< swapRung context lad -- Nope. revise the ladder we've been given.
     words -> Right (words:lad)
+
+swapRung :: (Word4List, ReverseDictionaries, Tiles) -> Ladder -> Either Ladder Ladder
+swapRung _ [] = Left [] -- Give up
+swapRung context lad@(h:t) = 
+  case ((drop 1 h):t) of
+    ([]:t') -> addRung context =<< swapRung context t' -- Go deeper
+    lad'    -> Right lad'
 
 findWords :: Word4List -> ReverseDictionaries -> Tiles -> Ladder -> Word4List
 -- TODO: use the fact that lad is only length 3
-findWords word4list revDicts tiles [] = 
-  word4list -- TODO: is this redundant?
 findWords word4List revDicts tiles l =
   let { getDictN = (\wordLen -> fromJust $ lookup wordLen revDicts) :: Int -> ForestDictionary
       ; getDictL = (\l i -> getDictN (min 4 (1 + i + (length l)))):: Ladder -> Int -> ForestDictionary
@@ -54,29 +55,28 @@ getSuffix letterNumber ladder =
 getSuffixCond :: ForestDictionary -> Int -> String -> Maybe (Word -> Bool)
 getSuffixCond revDict letterNumber revSuffix =
   -- TODO: move heavy lifting from findWord let statement into here?
-  (\chars word -> elem (word !! letterNumber) chars) <$> getLettersRev revDict revSuffix
+  (\chars word -> Set.member ({-# SCC bangbang #-} word !! letterNumber) chars) <$> getLettersRev revDict revSuffix
 
-getLettersRev :: ForestDictionary -> [Char] -> Maybe [Char]
+getLettersRev :: ForestDictionary -> [Char] -> Maybe (Set Char)
 -- Given the last n letters of a word, find the possible n+1th letters
 getLettersRev revDict letters =
-  map rootLabel <$> foldM lookupSuffixes revDict (reverse letters)
+  Set.fromList <$> map rootLabel <$> foldM lookupSuffixes revDict (reverse letters)
 
 lookupSuffixes :: ForestDictionary -> Char -> Maybe ForestDictionary
 -- Search the forest for char and return the relevant subforest
-lookupSuffixes dict char =
-  subForest <$> find ((char ==) . rootLabel) dict
+lookupSuffixes dict char = subForest <$> find ((char ==) . rootLabel) dict
 
 tilesAllow :: Tiles -> Word -> Bool
 tilesAllow tiles word =
+  --all (flip elem $ group tiles) (group $ sort word) -- FIXME: wrong
   [] == (word \\ tiles)
 
 tt :: Tiles -> Ladder -> Tiles
-tt tiles ladder =
-  (\\) tiles $ concat (map head ladder)
+tt tiles ladder = (\\) tiles $ concat (map head ladder)
+  --foldl (\\) tiles $ (map head ladder) -- slower because \\ is slow
 
 getWord4List :: [String] -> [Word]
-getWord4List =
-  filter ((4==) . length)
+getWord4List = filter ((4==) . length)
 
 addTree :: ForestDictionary -> String -> ForestDictionary
 addTree dict (h:t) =
