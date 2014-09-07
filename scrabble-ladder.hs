@@ -42,16 +42,12 @@ addRung context@(word4List, revDicts, allTiles) lad =
 
 swapRung :: (Word4List, ReverseDictionaries, Tiles) -> Ladder -> Either Ladder Ladder
 swapRung _ [] = Left [] -- Give up
-swapRung context lad@(h:t) = 
-  case ((drop 1 h):t) of
-    ([]:t') -> either (const (Left lad)) (addRung context) $ swapRung context t'
-    lad'    -> Right lad'
+swapRung context ((h:[]):t) = either (const (Left ([h]:t))) (addRung context) $ swapRung context t
+swapRung _ ((_:h'):t) = Right (h':t)
 
 findWords :: Word4List -> ReverseDictionaries -> Tiles -> Ladder -> Word4List
 findWords word4List revDicts tiles l =
-  let { getDictN = (\wordLen -> fromJust $ lookup wordLen revDicts) :: Int -> ForestDictionary
-      ; getDictL = (\l i -> getDictN (min 4 (1 + i + (length l)))):: Ladder -> Int -> ForestDictionary
-      ; getSuffixCondI = (\i -> getSuffixCond (getDictL l i) i (getSuffix i l)) :: Int -> Maybe (Word -> Bool)
+  let { getSuffixCondI = (\i -> getSuffixCond (getDict l i revDicts) i (getSuffix i l)) :: Int -> Maybe (Word -> Bool)
       ; suffixConds = sequence $ (Just (tilesAllow tiles)):(map getSuffixCondI [0..2]) :: Maybe[(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
       } in
@@ -59,12 +55,17 @@ findWords word4List revDicts tiles l =
       Nothing -> []
       Just words -> words
 
+getDict :: Ladder -> Int -> ReverseDictionaries -> ForestDictionary
+getDict ladder lettNum revDicts =
+  fromJust $ lookup (min 4 (1 + lettNum + (length ladder))) revDicts
+
 getSuffix :: Int -> Ladder -> String
 getSuffix letterNumber ladder =
   foldr (\(i, w) s -> (w ! (i+1)):s) [] $ take (3 - letterNumber) $ zip [letterNumber..] (map head ladder)
 
 getSuffixCond :: ForestDictionary -> Int -> String -> Maybe (Word -> Bool)
 getSuffixCond revDict letterNumber revSuffix =
+  -- TODO: construct the condition in one hit?
   -- TODO: move heavy lifting from findWord let statement into here?
   (\chars word -> Set.member ({-# SCC bangbang #-} word ! letterNumber) chars) <$> getLettersRev revDict revSuffix
 
