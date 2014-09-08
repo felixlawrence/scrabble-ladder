@@ -8,19 +8,21 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Control.Monad
 
-data Word = Word Char Char Char Char deriving (Show, Ord, Eq)
-(!) :: Word -> Int -> Char
-(!) (Word a _ _ _) 0 = a
-(!) (Word _ b _ _) 1 = b
-(!) (Word _ _ c _) 2 = c
-(!) (Word _ _ _ d) 3 = d
+desiredLadderHeight = 24 :: Int
 
+data Word = Word Char Char Char Char deriving (Show, Ord, Eq)
 type ForestDictionary = Forest Char
 type Word4List = [Word]
 type ReverseDictionaries = [(Int, ForestDictionary)]
 type Ladder = [Word4List]
 type Tiles = [Char]
 
+(!) :: Word -> Int -> Char
+(!) (Word a _ _ _) 0 = a
+(!) (Word _ b _ _) 1 = b
+(!) (Word _ _ c _) 2 = c
+(!) (Word _ _ _ d) 3 = d
+wordLen = 4 :: Int
 
 toString :: Word -> String
 toString (Word a b c d) = [a,b,c,d]
@@ -34,9 +36,9 @@ findLadder (word4List, _, _) 1 = Right [word4List]
 findLadder context rung = addRung context =<< findLadder context (rung - 1)
 
 addRung :: (Word4List, ReverseDictionaries, Tiles) -> Ladder -> Either Ladder Ladder
-addRung context@(word4List, revDicts, allTiles) lad =
+addRung context lad =
   -- Can we find some words that fit this rung?
-  case findWords word4List revDicts (tt allTiles lad) lad of
+  case findWords context lad of
     [] -> addRung context =<< swapRung context lad -- Nope. revise the ladder we've been given.
     words -> Right (words:lad)
 
@@ -45,34 +47,40 @@ swapRung _ [] = Left [] -- Give up
 swapRung context ((h:[]):t) = either (const (Left ([h]:t))) (addRung context) $ swapRung context t
 swapRung _ ((_:h'):t) = Right (h':t)
 
-findWords :: Word4List -> ReverseDictionaries -> Tiles -> Ladder -> Word4List
-findWords word4List revDicts tiles l =
-  let { getSuffixCondI = (\i -> getSuffixCond (getDict l i revDicts) i (getSuffix i l)) :: Int -> Maybe (Word -> Bool)
-      ; suffixConds = sequence $ (Just (tilesAllow tiles)):(map getSuffixCondI [0..2]) :: Maybe[(Word -> Bool)]
+findWords :: (Word4List, ReverseDictionaries, Tiles) -> Ladder -> Word4List
+findWords (word4List, revDicts, allTiles) l =
+  let { suffixConds = sequence $ (Just (tilesAllow (tt allTiles l))):(map (getSuffixCond revDicts l) [0..(wordLen-2)]) :: Maybe[(Word -> Bool)]
       ; viableWords = foldr filter word4List <$> suffixConds :: Maybe [Word]
       } in
     case viableWords of
       Nothing -> []
       Just words -> words
 
-getDict :: Ladder -> Int -> ReverseDictionaries -> ForestDictionary
-getDict ladder lettNum revDicts =
-  fromJust $ lookup (min 4 (1 + lettNum + (length ladder))) revDicts
+getDict :: Ladder -> Int -> String -> ReverseDictionaries -> ForestDictionary
+getDict ladder lettNum suffix revDicts =
+  let { ladTopLen = (desiredLadderHeight - length ladder) + length suffix
+      ; ladBotLen = 1 + lettNum + length suffix
+      ; thisWordLen = foldl min wordLen [ladTopLen, ladBotLen]
+      } in
+  fromJust $ lookup thisWordLen revDicts
 
-getSuffix :: Int -> Ladder -> String
-getSuffix letterNumber ladder =
-  foldr (\(i, w) s -> (w ! (i+1)):s) [] $ take (3 - letterNumber) $ zip [letterNumber..] (map head ladder)
+getRevSuffix :: Int -> Ladder -> String
+getRevSuffix lN ladder =
+  --reverse $ snd $ mapAccumL (\i w -> (i+1, (w ! (i+lN)))) 1 $ map head $ take (wordLen - 1 - lN) ladder
+  foldl (\s (i, w) -> (w ! (i+1+lN)):s) "" $ take (wordLen - 1 - lN) $ zip [0..] (map head ladder)
 
-getSuffixCond :: ForestDictionary -> Int -> String -> Maybe (Word -> Bool)
-getSuffixCond revDict letterNumber revSuffix =
+getSuffixCond :: ReverseDictionaries -> Ladder -> Int -> Maybe (Word -> Bool)
+getSuffixCond revDicts ladder letterNumber =
   -- TODO: construct the condition in one hit?
-  -- TODO: move heavy lifting from findWord let statement into here?
-  (\chars word -> Set.member ({-# SCC bangbang #-} word ! letterNumber) chars) <$> getLettersRev revDict revSuffix
+  let { revSuffix = getRevSuffix letterNumber ladder
+      ; revDict = getDict ladder letterNumber revSuffix revDicts
+      } in
+    (\chars word -> Set.member ({-# SCC bangbang #-} word ! letterNumber) chars) <$> getLettersRev revDict revSuffix
 
 getLettersRev :: ForestDictionary -> [Char] -> Maybe (Set Char)
--- Given the last n letters of a word, find the possible n+1th letters
-getLettersRev revDict letters =
-  Set.fromList <$> map rootLabel <$> foldM lookupSuffixes revDict (reverse letters)
+-- Given the last n letters of a word in reverse order, find the possible n+1th letters
+getLettersRev revDict revSuffix =
+  Set.fromList <$> map rootLabel <$> foldM lookupSuffixes revDict revSuffix
 
 lookupSuffixes :: ForestDictionary -> Char -> Maybe ForestDictionary
 -- Search the forest for char and return the relevant subforest
@@ -88,7 +96,7 @@ tt tiles ladder = (\\) tiles $ concat (map (toString . head) ladder)
   --foldl (\\) tiles $ (map head ladder) -- slower because \\ is slow
 
 getWord4List :: [String] -> [Word]
-getWord4List wl = map fromString $ filter ((4==) . length) wl
+getWord4List wl = map fromString $ filter ((wordLen==) . length) wl
 
 addTree :: ForestDictionary -> String -> ForestDictionary
 addTree dict (h:t) =
@@ -100,7 +108,7 @@ addTree dict [] = dict
 
 getReverseDicts :: [String] -> [(Int, ForestDictionary)]
 getReverseDicts sortedWords =
-  [(i, foldl addTree [] $ map reverse $ filter ((i==) . length)  sortedWords) | i <- [2..4]]
+  [(i, foldl addTree [] $ map reverse $ filter ((i==) . length)  sortedWords) | i <- [2..wordLen]]
 
 printLadderM :: Tiles -> Either Ladder Ladder -> IO()
 printLadderM allTiles (Left ladder) = do
@@ -116,20 +124,20 @@ printLadderM allTiles (Right ladder) = do
 
 prettyShowLadder :: Ladder -> String
 prettyShowLadder ladder = do
-  unlines $ reverse [take 80 $ drop (mod (-i) 25) $ cycle (w ++ replicate 21 ' ') 
+  unlines $ reverse [take 80 $ drop (mod (-i) 25) $ cycle (w ++ replicate (25 - wordLen) ' ') 
                       | (i, w) <- zip [0..] $ reverse (map (toString . head) ladder)]
 
 
 main = do
   contents <- getContents
   let sortedWords = sort $ lines $ map toUpper contents
-      word4List = getWord4List sortedWords
+      word4List = reverse $ getWord4List sortedWords
       revDicts = getReverseDicts sortedWords
       allTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ"
-  printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) 23
+  printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) desiredLadderHeight
 
 
 
 -- TODO List
--- Get ladder top working
+-- Parallel? (each thread pre-emptively calls swapRung)
 -- blanks??
