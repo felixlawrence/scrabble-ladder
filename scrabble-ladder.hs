@@ -1,6 +1,5 @@
 import Data.Char
 import Data.Functor
-import Data.Foldable (foldrM)
 import Data.List
 import Data.Tree
 import Data.Maybe
@@ -57,6 +56,21 @@ findWords (word4List, revDicts, allTiles) l =
       Nothing -> []
       Just words -> words
 
+tilesAllow :: Tiles -> Word -> Bool
+tilesAllow tiles word =
+  [] == ((toString word) \\ tiles)
+
+tt :: Tiles -> Ladder -> Tiles
+tt tiles = (tiles \\ ) . concat . (map (toString . head)) 
+  --foldl (\\) tiles $ (map head ladder) -- slower because \\ is slow
+
+getSuffixCond :: ReverseDictionaries -> Ladder -> Int -> Maybe (Word -> Bool)
+getSuffixCond revDicts ladder letterNumber =
+  let { revSuffix = getRevSuffix letterNumber ladder
+      ; revDict = getDict ladder letterNumber revSuffix revDicts
+      } in
+    (\chars word -> Set.member ({-# SCC bangbang #-} word ! letterNumber) chars) <$> getLettersRev revDict revSuffix
+
 getDict :: Ladder -> Int -> String -> ReverseDictionaries -> ForestDictionary
 getDict ladder lettNum suffix revDicts =
   let { ladTopLen = (desiredLadderHeight - length ladder) + length suffix
@@ -67,16 +81,7 @@ getDict ladder lettNum suffix revDicts =
 
 getRevSuffix :: Int -> Ladder -> String
 getRevSuffix lN ladder =
-  --reverse $ snd $ mapAccumL (\i w -> (i+1, (w ! (i+lN)))) 1 $ map head $ take (wordLen - 1 - lN) ladder
   foldl (\s (i, w) -> (w ! (i+1+lN)):s) "" $ take (wordLen - 1 - lN) $ zip [0..] (map head ladder)
-
-getSuffixCond :: ReverseDictionaries -> Ladder -> Int -> Maybe (Word -> Bool)
-getSuffixCond revDicts ladder letterNumber =
-  -- TODO: construct the condition in one hit?
-  let { revSuffix = getRevSuffix letterNumber ladder
-      ; revDict = getDict ladder letterNumber revSuffix revDicts
-      } in
-    (\chars word -> Set.member ({-# SCC bangbang #-} word ! letterNumber) chars) <$> getLettersRev revDict revSuffix
 
 getLettersRev :: ForestDictionary -> [Char] -> Maybe (Set Char)
 -- Given the last n letters of a word in reverse order, find the possible n+1th letters
@@ -86,15 +91,6 @@ getLettersRev revDict revSuffix =
 lookupSuffixes :: ForestDictionary -> Char -> Maybe ForestDictionary
 -- Search the forest for char and return the relevant subforest
 lookupSuffixes dict char = subForest <$> find ((char ==) . rootLabel) dict
-
-tilesAllow :: Tiles -> Word -> Bool
-tilesAllow tiles word =
-  --all (flip elem $ group tiles) (group $ sort word) -- FIXME: wrong
-  [] == ((toString word) \\ tiles)
-
-tt :: Tiles -> Ladder -> Tiles
-tt tiles = (tiles \\ ) . concat . (map (toString . head)) 
-  --foldl (\\) tiles $ (map head ladder) -- slower because \\ is slow
 
 getWord4List :: [String] -> [Word]
 getWord4List wl = map fromString $ filter ((wordLen==) . length) wl
