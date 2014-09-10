@@ -11,12 +11,6 @@ import Control.Monad
 desiredLadderHeight = 24 :: Int
 
 data Word = Word Char Char Char Char deriving (Show, Ord, Eq)
-type ForestDictionary = Forest Char
-type Word4List = [Word]
-type ReverseDictionaries = [(Int, ForestDictionary)]
-type Ladder = [Word4List]
-type Tiles = [Char]
-
 (!) :: Word -> Int -> Char
 (!) (Word a _ _ _) 0 = a
 (!) (Word _ b _ _) 1 = b
@@ -29,6 +23,13 @@ toString (Word a b c d) = [a,b,c,d]
 
 fromString :: String -> Word
 fromString [a,b,c,d] = Word a b c d
+
+type ForestDictionary = Forest Char
+type Word4List = [Word]
+type ReverseDictionaries = [(Int, ForestDictionary)]
+type Ladder = [Word4List]
+type Tiles = [Char]
+
 
 findLadder :: (Word4List, ReverseDictionaries, Tiles) -> Int -> Either Ladder Ladder
 -- Calculate a ladder of height 'rung'
@@ -92,7 +93,7 @@ tilesAllow tiles word =
   [] == ((toString word) \\ tiles)
 
 tt :: Tiles -> Ladder -> Tiles
-tt tiles ladder = (\\) tiles $ concat (map (toString . head) ladder)
+tt tiles = (tiles \\ ) . concat . (map (toString . head)) 
   --foldl (\\) tiles $ (map head ladder) -- slower because \\ is slow
 
 getWord4List :: [String] -> [Word]
@@ -135,9 +136,3 @@ main = do
       revDicts = getReverseDicts sortedWords
       allTiles = "AAAAAAAAABBCCDDDDEEEEEEEEEEEEFFGGGHHIIIIIIIIIJKLLLLMMNNNNNNOOOOOOOOPPQRRRRRRSSSSTTTTTTUUUUVVWWXYYZ"
   printLadderM allTiles $ findLadder (word4List, revDicts, allTiles) desiredLadderHeight
-
-
-
--- TODO List
--- Parallel? (each thread pre-emptively calls swapRung)
--- blanks??
